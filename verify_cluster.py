@@ -16,27 +16,44 @@ def get_clusters(cluster_file: str):
     generate a K*S matrix M with K number of clusters and S number of references
     with entry M[k][s] denotes the relative score be assigned to s-reference on k-th cluster
 """
-def gen_matrix(clusters: list, ref_ids: list, assign_dict: dict):
+def gen_matrix(cluster_file: list, ref_ids: list, assign_dict: dict):
+    clusters = get_clusters(cluster_file)
     num_clusters = len(clusters)
-    num_ref = len(ref_ids)
+    full_ref = list(ref_ids)
+    full_ref.append("NA")
     mat = dict.fromkeys(range(num_clusters), None)
-    non_sense = []
     for i, cids in enumerate(clusters):
-        mat[i] = dict.fromkeys(ref_ids, 0)
+        mat[i] = dict.fromkeys(full_ref, 0)
         for cid in cids:
             if cid not in assign_dict:
                 # contig cannot be mapped to any ground-truth
-                non_sense.append(cid)
+                mat[i]["NA"] += 1
             else:
                 ref_no, seg_len, ref_len, matching, mapped, quality = assign_dict[cid]
                 mat[i][ref_no] += 1
         print(f">>>{i}-th cluster\n{mat[i].keys()}\n{mat[i].values()}")
 
-    return mat, non_sense
+    return mat
 
-def eval_cluster(mat: dict, ref_ids: list, non_sense: list):
-    num_non_sense = len(non_sense)
+def mat2csv(mat: dict, ref_ids: list, prefix: str):
+    csv_file = prefix + "mat.csv"
+    System("echo "" > " + csv_file)
+    with open(csv_file, "w") as csv_fd:
+        # header
+        s = "cluster vs reference," + ",".join(ref_ids)+",NA\n"
+        csv_fd.write(s)
+        for i, row in mat.items():
+            arr = [str(i)]
+            for ref_id in ref_ids:
+                arr.append(str(row[ref_id]))
+            arr.append(str(row["NA"]))
+            csv_fd.write(",".join(arr) + "\n")
+        csv_fd.close()
+    return
+
+def eval_cluster(mat: dict, ref_ids: list):
     # compute precision
+    num_non_sense = sum([row["NA"] for row in mat.values()])
     total_utgs = sum([sum(row.values()) for row in mat.values()])
     max_utgs_sum = sum([max(row.values()) for row in mat.values()])
     precision = float(max_utgs_sum) / total_utgs
@@ -52,12 +69,12 @@ def eval_cluster(mat: dict, ref_ids: list, non_sense: list):
     print("Recall: ", round(precision, 3))
 
     # compute F1-score
-    F1 = 2 * (float(precision * recall) / (precision + recall))
+    f1 = 2 * (float(precision * recall) / (precision + recall))
     print("F1: ", round(precision, 3))
 
     # compute Adjusted Rand Index (ARI)
     # measure of similarity between the binning result and its actual grouping. It is calculated as follows.
-    return
+    return precision, recall, f1
 
 def get_contig_assignment(mapped_paf: str, utgs: list):
     assign_dict = {}
@@ -76,48 +93,10 @@ def get_contig_assignment(mapped_paf: str, utgs: list):
         pfd.close()
     return assign_dict
 
-# def check_cluster(cluster_file: str, assign_dict: dict, refs: dict):
-#     clusters = get_clusters(cluster_file)
-    
-#     for i, cluster in enumerate(clusters):
-#         print("-----------------------------------------")
-#         print("-----------------------------------------")
-#         print(f"-Current checking {i}th cluster with {len(cluster)} entries")
-#         ref_assigns = {}
-#         for ref_id in refs.keys():
-#             ref_assigns[ref_id] = []
-#         ref_assigns['na'] = []
-#         for cid in cluster:
-#             if cid in assign_dict:
-#                 (ref_no, seg_len, ref_len, matching, mapped, quality) = assign_dict[cid]
-#                 ref_assigns[ref_no].append((cid, ref_no, seg_len, ref_len, matching, mapped, quality))
-#             else:
-#                 ref_assigns['na'].append(cid)
-#         for rid, rstatus in ref_assigns.items():
-#             if rstatus != []:
-#                 if rid != 'na':
-#                     print(f"*ref: {rid} with size: {len(refs[rid])}, contig count: {len(rstatus)}")
-#                     for (cid, ref_no, seg_len, ref_len, matching, mapped, quality) in rstatus:
-#                         print(f"-->contig: {cid} with size: {seg_len}, match/total mapping: {matching} / {mapped}, qscore: {quality}")
-#                 else:
-#                     print(f"*NA, contig count: {len(rstatus)}")
-#                     for cid in rstatus:
-#                         print(f"-->contig: {cid}")
-#         (max_rid, max_status) = max(ref_assigns.items(), key=lambda tple: len(tple[1]))
-#         print(f"majority ref: {max_rid}, ({len(max_status)}/{len(cluster)})")
-#     return
-
-if __name__ == "__main__":
-    if len(sys.argv) != 4:
-        print(f"{sys.argv[0]} <contigs .fasta> <cluster .txt> <reference .fasta>")
-        sys.exit(0)
-    
-    _, contig_file, cluster_file, ref_file = sys.argv
-
+def eval_wrapper(contig_file, cluster_file, ref_file, prefix):
     refs = get_utgs(ref_file)
     ref_ids = list(refs.keys())
     utgs = get_utgs(contig_file)
-    utg_ids = list(utgs.keys())
 
     mapped_contig_paf = "mapped.contigs.paf"
     print("getting contig-ref alignment")
@@ -126,13 +105,38 @@ if __name__ == "__main__":
     else:
         print("mapped contigs paf exists")
 
-    clusters = get_clusters(cluster_file)
     assign_dict = get_contig_assignment(mapped_contig_paf, utgs)
-    mat, non_sense = gen_matrix(clusters, ref_ids, assign_dict)
-    eval_cluster(mat, ref_ids, non_sense)
+    mat = gen_matrix(cluster_file, ref_ids, assign_dict)
+    mat2csv(mat, ref_ids, prefix)
+    precision, recall, f1 = eval_cluster(mat, ref_ids)
 
-    # check_cluster(cluster_file, assign_dict, refs)
-    sys.exit(0)
+    return precision, recall, f1
+
+# if __name__ == "__main__":
+#     if len(sys.argv) != 4:
+#         print(f"{sys.argv[0]} <contigs .fasta> <cluster .txt> <reference .fasta>")
+#         sys.exit(0)
+    
+#     _, contig_file, cluster_file, ref_file = sys.argv
+
+#     refs = get_utgs(ref_file)
+#     ref_ids = list(refs.keys())
+#     utgs = get_utgs(contig_file)
+#     utg_ids = list(utgs.keys())
+
+#     mapped_contig_paf = "mapped.contigs.paf"
+#     print("getting contig-ref alignment")
+#     if not os.path.exists(mapped_contig_paf):
+#         System("minimap2 --secondary=no {0} {1} > {2}".format(ref_file, contig_file, mapped_contig_paf))
+#     else:
+#         print("mapped contigs paf exists")
+
+#     assign_dict = get_contig_assignment(mapped_contig_paf, utgs)
+#     mat = gen_matrix(cluster_file, ref_ids, assign_dict)
+#     eval_cluster(mat, ref_ids)
+
+#     # check_cluster(cluster_file, assign_dict, refs)
+#     sys.exit(0)
 
 
     
