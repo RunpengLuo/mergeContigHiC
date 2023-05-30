@@ -42,8 +42,9 @@ def mat2csv(mat: dict, ref_ids: list, prefix: str):
         # header
         s = "cluster vs reference," + ",".join(ref_ids)+",NA\n"
         csv_fd.write(s)
-        for i, row in mat.items():
-            arr = [str(i)]
+        for i in range(len(mat)):
+            row = mat[i]
+            arr = [str(i)+";"+str(sum(row.values()))]
             for ref_id in ref_ids:
                 arr.append(str(row[ref_id]))
             arr.append(str(row["NA"]))
