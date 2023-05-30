@@ -1,6 +1,6 @@
 import os
 import sys
-import markov_clustering as mc
+# import markov_clustering as mc
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 import numpy as np
@@ -19,27 +19,31 @@ def load_mat(mat_file):
         mat_fd.close()
     return mat
 
-def draw_hic_map(mat, utg_ids):
+def draw_hic_map(mat, utg_ids, prefix):
     print("draw hic map")
     fig, ax = plt.subplots(figsize=(10,10))
     mat_scaled = np.log(mat)
     #  im = plt.imshow(mat, cmap='hot', interpolation='nearest', norm=LogNorm(vmin=0.01, vmax=1))
     im = plt.imshow(mat_scaled, cmap='hot', norm=LogNorm())
-    ax.set_xticks(ticks=np.arange(0, len(utg_ids), 1), labels=utg_ids, rotation=90)
+    
+    ax.set_xticks(ticks=np.arange(0, len(utg_ids), 1), rotation=90, labels=utg_ids)
+    ax.set_xticklabels(utg_ids)
+
     ax.set_yticks(ticks=np.arange(0, len(utg_ids), 1), labels=utg_ids)
+    ax.set_yticklabels(utg_ids)
 
     fig.colorbar(im)
     plt.title("HiC contact map")
-    plt.savefig(mat_file + ".png")
-
-def draw_cluster(mat, utg_ids):
-    print("draw cluster")
-    print(mat)
-    result = mc.run_mcl(mat, inflation=2.0)
-    clusters = mc.get_clusters(result)
-    # pos=positions, 
-    mc.draw_graph(mat, clusters, node_size=50, with_labels=False, edge_color="silver")
-    plt.show()
+    plt.savefig(prefix + ".png")
+    return
+# def draw_cluster(mat, utg_ids):
+#     print("draw cluster")
+#     print(mat)
+#     result = mc.run_mcl(mat, inflation=2.0)
+#     clusters = mc.get_clusters(result)
+#     # pos=positions, 
+#     mc.draw_graph(mat, clusters, node_size=50, with_labels=False, edge_color="silver")
+#     plt.show()
 
 
 if __name__ == "__main__":
@@ -52,8 +56,8 @@ if __name__ == "__main__":
     mat = load_mat(mat_file)
     utgs = get_edges(contig_file)
     utg_ids = list(utgs.keys())
-
-    draw_hic_map(mat, utg_ids)
+    prefix = mat_file.split(".")[0]
+    draw_hic_map(mat, utg_ids, prefix)
     # draw_cluster(mat, utg_ids)
 
     sys.exit(0)
