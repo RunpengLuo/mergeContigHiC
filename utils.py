@@ -39,6 +39,8 @@ def get_reads_fastq(fastq_file):
                 reads[prev_id] = l.strip()
             i = (i+1) % 4
         fd.close()
+        if prev_id != "":
+            reads.append((prev_id, prev_seq))
 
     print("total reads: ", counter)
     return reads

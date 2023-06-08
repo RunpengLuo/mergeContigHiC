@@ -52,12 +52,14 @@ def mat2csv(mat: dict, ref_ids: list, prefix: str):
         csv_fd.close()
     return
 
-def eval_cluster(mat: dict, ref_ids: list):
+def eval_cluster(mat: dict, ref_ids: list, total_elem: int):
     # compute precision
     num_non_sense = sum([row["NA"] for row in mat.values()])
-    total_utgs = sum([sum(row.values()) for row in mat.values()])
+    classified = sum([sum(row.values()) for row in mat.values()])
     max_utgs_sum = sum([max(row.values()) for row in mat.values()])
-    precision = float(max_utgs_sum) / total_utgs
+    precision = float(max_utgs_sum) / classified
+    print(max_utgs_sum)
+    print(classified)
     print("Precision: ", round(precision, 3))
     # compute recall
     recall_num = 0
@@ -66,12 +68,12 @@ def eval_cluster(mat: dict, ref_ids: list):
         for i, row in mat.items():
             col_max = max(col_max, row[ref_id])
         recall_num += col_max
-    recall = float(recall_num) / (total_utgs + num_non_sense)
-    print("Recall: ", round(precision, 3))
+    recall = float(recall_num) / total_elem
+    print("Recall: ", round(recall, 3))
 
     # compute F1-score
     f1 = 2 * (float(precision * recall) / (precision + recall))
-    print("F1: ", round(precision, 3))
+    print("F1: ", round(f1, 3))
 
     # compute Adjusted Rand Index (ARI)
     # measure of similarity between the binning result and its actual grouping. It is calculated as follows.
@@ -109,7 +111,7 @@ def eval_wrapper(contig_file, cluster_file, ref_file, prefix):
     assign_dict = get_contig_assignment(mapped_contig_paf, utgs)
     mat = gen_matrix(cluster_file, ref_ids, assign_dict)
     mat2csv(mat, ref_ids, prefix)
-    precision, recall, f1 = eval_cluster(mat, ref_ids)
+    precision, recall, f1 = eval_cluster(mat, ref_ids, len(utgs))
 
     return precision, recall, f1
 
